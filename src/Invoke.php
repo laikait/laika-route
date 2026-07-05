@@ -20,7 +20,7 @@ class Invoke
                     }
 
                     $instance = new $class();
-                    return $instance->handle($params, $next);
+                    return $instance->handle($next, $params);
                 };
             },
             $core
@@ -43,7 +43,7 @@ class Invoke
         }
     }
 
-    public static function controller($controller, array $params = [])
+    public static function controller(mixed $controller, array $params = [])
     {
         if ($controller === null) {
             return null;
@@ -87,7 +87,11 @@ class Invoke
     {
         [$name, $argsStr] = array_pad(explode('|', $entry, 2), 2, null);
 
-        $class = str_starts_with($name, '\\') ? $name : $prefix . $name;
+        if (str_starts_with($name, '\\') || class_exists($name)) {
+            $class = ltrim($name, '\\');
+        } else {
+            $class = $prefix . $name;
+        }
 
         $params = [];
         if ($argsStr) {

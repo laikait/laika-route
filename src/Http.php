@@ -8,32 +8,32 @@ class Http
 {
     protected array $lastRoute;
 
-    public static function get(string $uri, $controller, array $middlewares = []): self
+    public static function get(string $uri, mixed $controller, array $middlewares = []): self
     {
         return static::make(Handler::get($uri, $controller, $middlewares));
     }
 
-    public static function post(string $uri, $controller, array $middlewares = []): self
+    public static function post(string $uri, mixed $controller, array $middlewares = []): self
     {
         return static::make(Handler::post($uri, $controller, $middlewares));
     }
 
-    public static function put(string $uri, $controller, array $middlewares = []): self
+    public static function put(string $uri, mixed $controller, array $middlewares = []): self
     {
         return static::make(Handler::put($uri, $controller, $middlewares));
     }
 
-    public static function patch(string $uri, $controller, array $middlewares = []): self
+    public static function patch(string $uri, mixed $controller, array $middlewares = []): self
     {
         return static::make(Handler::patch($uri, $controller, $middlewares));
     }
 
-    public static function delete(string $uri, $controller, array $middlewares = []): self
+    public static function delete(string $uri, mixed $controller, array $middlewares = []): self
     {
         return static::make(Handler::delete($uri, $controller, $middlewares));
     }
 
-    public static function options(string $uri, $controller, array $middlewares = []): self
+    public static function options(string $uri, mixed $controller, array $middlewares = []): self
     {
         return static::make(Handler::options($uri, $controller, $middlewares));
     }
@@ -59,36 +59,18 @@ class Http
 
     public function middleware(array $middlewares): self
     {
-        if ($this->groupExecuted) {
-            Handler::applyToPrefix($this->pendingGroup['prefix'], middlewares: $middlewares);
-            return $this;
-        }
-
-        $method = $this->lastRoute['method'];
-        $uri = $this->lastRoute['uri'];
-        $routes = Handler::getRoutes();
-        $routes[$method][$uri]['middlewares'] = array_merge(
-            $routes[$method][$uri]['middlewares'],
-            $middlewares
-        );
+        $this->groupExecuted ?
+            Handler::applyToPrefix($this->pendingGroup['prefix'], middlewares: $middlewares) :
+            Handler::appendMiddleware($this->lastRoute['method'], $this->lastRoute['uri'], $middlewares);
         return $this;
     }
 
     public function afterware(array $afterwares): self
     {
-        if ($this->groupExecuted) {
-            Handler::applyToPrefix($this->pendingGroup['prefix'], afterwares: $afterwares);
-            return $this;
-        }
-
-        $method = $this->lastRoute['method'];
-        $uri = $this->lastRoute['uri'];
-        $routes = Handler::getRoutes();
-        $routes[$method][$uri]['afterwares'] = array_merge(
-            $routes[$method][$uri]['afterwares'],
-            $afterwares
-        );
-        return $this;
+        $this->groupExecuted ?
+            Handler::applyToPrefix($this->pendingGroup['prefix'], afterwares: $afterwares) :
+            Handler::appendAfterware($this->lastRoute['method'], $this->lastRoute['uri'], $afterwares);
+        return $this;   
     }
 
     public static function globalMiddleware(array $middlewares): void
