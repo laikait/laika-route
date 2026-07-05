@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Laika\Route;
 
+use Laika\Service\Response as ResponseService;
+use Laika\Service\MimeType;
+
 class Dispatcher
 {
     protected static array $assetRoutes = [];
-    protected static array $hookPaths = [];
 
     public static function preDispatcher(): void
     {
@@ -18,33 +20,16 @@ class Dispatcher
     public static function registerInitiators(): void
     {
         static::registerHeaders();
-        static::loadHookFiles();
     }
 
     public static function registerHeaders(): void
     {
-        if (!headers_sent()) {
-            header('X-Powered-By: Laika');
-        }
+        ResponseService::setDefaultHeaders();
     }
 
     public static function registerAssetRoute(string $uri, string $filePath): void
     {
         static::$assetRoutes[Url::normalize($uri)] = $filePath;
-    }
-
-    public static function addHookPath(string $path): void
-    {
-        static::$hookPaths[] = $path;
-    }
-
-    public static function loadHookFiles(): void
-    {
-        foreach (static::$hookPaths as $path) {
-            foreach (glob(rtrim($path, '/') . '/*hook.php') as $file) {
-                require $file;
-            }
-        }
     }
 
     public static function dispatch(): void
@@ -54,13 +39,18 @@ class Dispatcher
         $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
         $normalized = Url::normalize(Url::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
 
-        if (isset(static::$assetRoutes[$normalized])) {
-            static::serveAsset(static::$assetRoutes[$normalized]);
+        if (pathinfo($normalized, PATHINFO_EXTENSION)) {
+            self::serveAsset($normalized);
             return;
         }
 
+        // Load Routes and Match Request
+        Url::loadRoutes();
+
+        // Get Route and Params
         ['route' => $route, 'params' => $params] = Url::matchRequestRoute($requestUri);
 
+        // Dispatch Fallback if no route is matched
         if ($route === null) {
             static::dispatchFallback($normalized);
             return;
@@ -75,23 +65,46 @@ class Dispatcher
 
         $response = Invoke::middleware($middlewares, $core, $params)();
 
+        // Send Response
+        self::serveResponse($response);
+
         Invoke::afterware($afterwares, $response, $params);
     }
 
-    protected static function serveAsset(string $filePath): void
+    /*================================= PRIVATE API =================================*/
+    /**
+     * Handle Response
+     * @param ?string $response Response
+     * @return void
+     */
+    private static function serveResponse(?string $response): void
     {
-        if (!is_file($filePath)) {
+        if (empty($response)) return;
+
+        $ct = ResponseService::getContentType();
+
+        match (true) {
+            str_starts_with($ct, 'application/json')        => Response\Json::render($response),
+            str_starts_with($ct, 'text/plain')              => Response\Text::render($response),
+            str_starts_with($ct, 'text/html')               => Response\Html::render($response),
+            default                                         => Response\Html::render($response)
+        };
+    }
+
+    private static function serveAsset(string $filePath): void
+    {
+        $file = APP_PATH . $filePath;
+        if (!is_file($file)) {
             http_response_code(404);
-            echo _404::show();
             return;
         }
 
-        $mime = mime_content_type($filePath) ?: 'application/octet-stream';
+        $mime = MimeType::fromFile($file);
         header('Content-Type: ' . $mime);
-        readfile($filePath);
+        readfile($file);
     }
 
-    protected static function dispatchFallback(string $uri): void
+    private static function dispatchFallback(string $uri): void
     {
         $fallbacks = Handler::getFallbacks();
         uksort($fallbacks, fn($a, $b) => strlen($b) - strlen($a));
@@ -103,12 +116,12 @@ class Dispatcher
                     fn() => ($fallback['callback'])()
                 )();
 
-                echo $response;
+                Response\Html::render($response);
                 return;
             }
         }
 
         http_response_code(404);
-        echo _404::show();
+        Response\Html::render(_404::show());
     }
 }

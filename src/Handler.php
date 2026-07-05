@@ -14,7 +14,7 @@ class Handler
     protected static array $globalMiddleware = [];
     protected static array $globalAfterware = [];
 
-    public static function register(string $method, string $uri, $controller, array $middlewares = []): array
+    public static function register(string $method, string $uri, mixed $controller, array $middlewares = []): array
     {
         $method = strtoupper($method);
         $uri = static::applyGroupPrefix($uri);
@@ -36,32 +36,32 @@ class Handler
         return $route;
     }
 
-    public static function get(string $uri, $controller, array $middlewares = []): array
+    public static function get(string $uri, mixed $controller, array $middlewares = []): array
     {
         return static::register('GET', $uri, $controller, $middlewares);
     }
 
-    public static function post(string $uri, $controller, array $middlewares = []): array
+    public static function post(string $uri, mixed $controller, array $middlewares = []): array
     {
         return static::register('POST', $uri, $controller, $middlewares);
     }
 
-    public static function put(string $uri, $controller, array $middlewares = []): array
+    public static function put(string $uri, mixed $controller, array $middlewares = []): array
     {
         return static::register('PUT', $uri, $controller, $middlewares);
     }
 
-    public static function patch(string $uri, $controller, array $middlewares = []): array
+    public static function patch(string $uri, mixed $controller, array $middlewares = []): array
     {
         return static::register('PATCH', $uri, $controller, $middlewares);
     }
 
-    public static function delete(string $uri, $controller, array $middlewares = []): array
+    public static function delete(string $uri, mixed $controller, array $middlewares = []): array
     {
         return static::register('DELETE', $uri, $controller, $middlewares);
     }
 
-    public static function options(string $uri, $controller, array $middlewares = []): array
+    public static function options(string $uri, mixed $controller, array $middlewares = []): array
     {
         return static::register('OPTIONS', $uri, $controller, $middlewares);
     }
@@ -195,6 +195,22 @@ class Handler
                 }
             }
         }
+    }
+
+    public static function appendMiddleware(string $method, string $uri, array $middlewares): void
+    {
+        static::$routes[strtoupper($method)][$uri]['middlewares'] = array_merge(
+            static::$routes[strtoupper($method)][$uri]['middlewares'],
+            $middlewares
+        );
+    }
+
+    public static function appendAfterware(string $method, string $uri, array $afterwares): void
+    {
+        static::$routes[strtoupper($method)][$uri]['afterwares'] = array_merge(
+            static::$routes[strtoupper($method)][$uri]['afterwares'],
+            $afterwares
+        );
     }
 
     public static function getRoutes(): array
