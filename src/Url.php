@@ -1,0 +1,72 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Laika\Route;
+
+class Url
+{
+    public static function normalize(string $uri): string
+    {
+        $uri = '/' . trim($uri, '/');
+        return $uri === '//' ? '/' : $uri;
+    }
+
+    public static function normalizeFallbackKey(?string $group): string
+    {
+        if ($group === null || $group === '') {
+            return '/';
+        }
+        return '/' . trim($group, '/') . '/';
+    }
+
+    public static function method(): string
+    {
+        return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    }
+
+    public static function matchRequestRoute(string $requestUri): array
+    {
+        $method = static::method();
+        $routes = Handler::getOnlyRoutes($method);
+        $requestUri = static::normalize(parse_url($requestUri, PHP_URL_PATH) ?? '/');
+
+        foreach ($routes as $uri => $route) {
+            $pattern = static::compilePattern($uri);
+
+            if (preg_match($pattern, $requestUri, $matches)) {
+                $params = array_filter(
+                    $matches,
+                    fn($key) => !is_int($key),
+                    ARRAY_FILTER_USE_KEY
+                );
+
+                return ['route' => $route, 'params' => $params];
+            }
+        }
+
+        return ['route' => null, 'params' => []];
+    }
+
+    protected static function compilePattern(string $uri): string
+    {
+        $pattern = preg_replace_callback(
+            '#\{([a-zA-Z_][a-zA-Z0-9_]*)(:([^}]+))?\}#',
+            function ($m) {
+                $name = $m[1];
+                $regex = $m[3] ?? '[^/]+';
+                return "(?P<{$name}>{$regex})";
+            },
+            $uri
+        );
+
+        return '#^' . $pattern . '$#';
+    }
+
+    public static function loadRoutes(string $path): void
+    {
+        foreach (glob(rtrim($path, '/') . '/*.php') as $file) {
+            require $file;
+        }
+    }
+}
