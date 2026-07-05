@@ -52,7 +52,7 @@ class Dispatcher
         static::preDispatcher();
 
         $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-        $normalized = Url::normalize(parse_url($requestUri, PHP_URL_PATH) ?? '/');
+        $normalized = Url::normalize(Url::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
 
         if (isset(static::$assetRoutes[$normalized])) {
             static::serveAsset(static::$assetRoutes[$normalized]);

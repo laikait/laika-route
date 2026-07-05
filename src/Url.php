@@ -29,7 +29,7 @@ class Url
     {
         $method = static::method();
         $routes = Handler::getOnlyRoutes($method);
-        $requestUri = static::normalize(parse_url($requestUri, PHP_URL_PATH) ?? '/');
+        $requestUri = static::normalize(static::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
 
         foreach ($routes as $uri => $route) {
             $pattern = static::compilePattern($uri);
@@ -46,6 +46,17 @@ class Url
         }
 
         return ['route' => null, 'params' => []];
+    }
+
+    public static function stripBasePath(string $path): string
+    {
+        $basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+
+        if ($basePath !== '' && $basePath !== '/' && str_starts_with($path, $basePath)) {
+            $path = substr($path, strlen($basePath));
+        }
+
+        return $path === '' ? '/' : $path;
     }
 
     protected static function compilePattern(string $uri): string
