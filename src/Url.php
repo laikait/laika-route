@@ -74,9 +74,10 @@ class Url
         return '#^' . $pattern . '$#';
     }
 
-    public static function loadRoutes(): void
+    public static function loadRoutes(?string $path = null): void
     {
-        foreach (glob(APP_PATH . '/lf-routes/*.php') as $file) {
+        $path = $path ?? APP_PATH . '/lf-routes';
+        foreach (glob(rtrim($path, '/') . '/*.php') as $file) {
             require_once $file;
         }
     }
