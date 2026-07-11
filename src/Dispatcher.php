@@ -1,11 +1,20 @@
 <?php
+/**
+ * Laika Framework
+ * Author: Showket Ahmed
+ * Email: riyadhtayf@gmail.com
+ * License: MIT
+ * This file is part of the Laika PHP Framework.
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
 
 declare(strict_types=1);
 
 namespace Laika\Route;
 
-use Laika\Service\Response as ResponseService;
+use Laika\Service\CORS;
 use Laika\Service\MimeType;
+use Laika\Service\Response as ResponseService;
 
 class Dispatcher
 {
@@ -24,7 +33,7 @@ class Dispatcher
 
     public static function registerHeaders(): void
     {
-        ResponseService::setDefaultHeaders();
+        CORS::handle();
     }
 
     public static function registerAssetRoute(string $uri, string $filePath): void
@@ -56,19 +65,18 @@ class Dispatcher
             return;
         }
 
-        $middlewares = array_merge(Handler::getGlobalMiddleware(), $route['middlewares']);
-        $afterwares = array_merge(Handler::getGlobalAfterware(), $route['afterwares']);
+        $pipelines = array_merge(Handler::getGlobalPipelines(), $route['pipelines']);
+        $filters = array_merge(Handler::getGlobalFilters(), $route['filters']);
 
         $core = function () use ($route, $params) {
             return Invoke::controller($route['controller'], $params);
         };
 
-        $response = Invoke::middleware($middlewares, $core, $params)();
+        $response = Invoke::pipeline($pipelines, $core, $params)();
+        $response = Invoke::filter($filters, $response, $params);
 
         // Send Response
         self::serveResponse($response);
-
-        Invoke::afterware($afterwares, $response, $params);
     }
 
     /*================================= PRIVATE API =================================*/

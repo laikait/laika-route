@@ -1,4 +1,12 @@
 <?php
+/**
+ * Laika Framework
+ * Author: Showket Ahmed
+ * Email: riyadhtayf@gmail.com
+ * License: MIT
+ * This file is part of the Laika PHP Framework.
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
 
 declare(strict_types=1);
 
@@ -8,34 +16,34 @@ class Http
 {
     protected array $lastRoute;
 
-    public static function get(string $uri, mixed $controller, array $middlewares = []): self
+    public static function get(string $uri, mixed $controller, string|array $pipelines = []): self
     {
-        return static::make(Handler::get($uri, $controller, $middlewares));
+        return static::make(Handler::get($uri, $controller, $pipelines));
     }
 
-    public static function post(string $uri, mixed $controller, array $middlewares = []): self
+    public static function post(string $uri, mixed $controller, string|array $pipelines = []): self
     {
-        return static::make(Handler::post($uri, $controller, $middlewares));
+        return static::make(Handler::post($uri, $controller, $pipelines));
     }
 
-    public static function put(string $uri, mixed $controller, array $middlewares = []): self
+    public static function put(string $uri, mixed $controller, string|array $pipelines = []): self
     {
-        return static::make(Handler::put($uri, $controller, $middlewares));
+        return static::make(Handler::put($uri, $controller, $pipelines));
     }
 
-    public static function patch(string $uri, mixed $controller, array $middlewares = []): self
+    public static function patch(string $uri, mixed $controller, string|array $pipelines = []): self
     {
-        return static::make(Handler::patch($uri, $controller, $middlewares));
+        return static::make(Handler::patch($uri, $controller, $pipelines));
     }
 
-    public static function delete(string $uri, mixed $controller, array $middlewares = []): self
+    public static function delete(string $uri, mixed $controller, string|array $pipelines = []): self
     {
-        return static::make(Handler::delete($uri, $controller, $middlewares));
+        return static::make(Handler::delete($uri, $controller, $pipelines));
     }
 
-    public static function options(string $uri, mixed $controller, array $middlewares = []): self
+    public static function options(string $uri, mixed $controller, string|array $pipelines = []): self
     {
-        return static::make(Handler::options($uri, $controller, $middlewares));
+        return static::make(Handler::options($uri, $controller, $pipelines));
     }
 
     protected static function make(array $route): self
@@ -57,35 +65,35 @@ class Http
         return $instance;
     }
 
-    public function middleware(array $middlewares): self
+    public function pipeline(string|array $pipelines): self
     {
         $this->groupExecuted ?
-            Handler::applyToPrefix($this->pendingGroup['prefix'], middlewares: $middlewares) :
-            Handler::appendMiddleware($this->lastRoute['method'], $this->lastRoute['uri'], $middlewares);
+            Handler::applyToPrefix($this->pendingGroup['prefix'], pipelines: $pipelines) :
+            Handler::appendPipeline($this->lastRoute['method'], $this->lastRoute['uri'], $pipelines);
         return $this;
     }
 
-    public function afterware(array $afterwares): self
+    public function filter(string|array $filters): self
     {
         $this->groupExecuted ?
-            Handler::applyToPrefix($this->pendingGroup['prefix'], afterwares: $afterwares) :
-            Handler::appendAfterware($this->lastRoute['method'], $this->lastRoute['uri'], $afterwares);
+            Handler::applyToPrefix($this->pendingGroup['prefix'], filters: $filters) :
+            Handler::appendFilter($this->lastRoute['method'], $this->lastRoute['uri'], (array) $filters);
         return $this;   
     }
 
-    public static function globalMiddleware(array $middlewares): void
+    public static function globalPipeline(string|array $pipelines): void
     {
-        Handler::globalMiddleware($middlewares);
+        Handler::globalPipeline($pipelines);
     }
 
-    public static function globalAfterware(array $afterwares): void
+    public static function globalFilter(string|array $filters): void
     {
-        Handler::globalAfterware($afterwares);
+        Handler::globalFilter($filters);
     }
 
-    public static function fallback(?string $group, callable $callback, array $middlewares = []): void
+    public static function fallback(?string $group, callable $callback, string|array $pipelines = []): void
     {
-        Handler::registerFallback($group, $callback, $middlewares);
+        Handler::registerFallback($group, $callback, $pipelines);
     }
 
     public static function dispatch(): void

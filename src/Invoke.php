@@ -1,49 +1,97 @@
 <?php
+/**
+ * Laika Framework
+ * Author: Showket Ahmed
+ * Email: riyadhtayf@gmail.com
+ * License: MIT
+ * This file is part of the Laika PHP MVC Framework.
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
 
 declare(strict_types=1);
 
 namespace Laika\Route;
 
+use Laika\Core\Interfaces\PipelineInterface;
+use Laika\Core\Interfaces\FilterInterface;
+
 class Invoke
 {
-    public static function middleware(array $middlewares, callable $core, array &$params = []): callable
+    /**
+     * Invoke Pipeline
+     * Run Before Response
+     * @param string[] $pipelines
+     * @param callable $core Call Next Pipeline
+     * @param array $params
+     * @return callable
+     */
+    public static function pipeline(array $pipelines, callable $core, array &$params = []): callable
     {
-        $chain = array_reduce(
-            array_reverse($middlewares),
-            function ($next, $middleware) use (&$params) {
-                return function () use ($middleware, $next, &$params) {
-                    [$class, $args] = static::parse($middleware, 'App\\Middleware\\');
-                    $params = array_merge($params, $args);
+        $chain = $core;
 
-                    if (!is_subclass_of($class, MiddlewareInterface::class) && !method_exists($class, 'handle')) {
-                        throw new \RuntimeException("{$class} must implement MiddlewareInterface with handle().");
-                    }
+        foreach (array_reverse($pipelines) as $pipeline) {
+            $next = $chain;
+            $chain = function (bool $continue = true) use ($pipeline, $next, &$params, $core) {
+                if (!$continue) {
+                    return $core();
+                }
 
-                    $instance = new $class();
-                    return $instance->handle($next, $params);
-                };
-            },
-            $core
-        );
+                [$class, $args] = static::parse($pipeline, 'App\\Pipeline\\');
+                $params = array_merge($params, $args);
+
+                if (!is_subclass_of($class, PipelineInterface::class) && !method_exists($class, 'handle')) {
+                    throw new \RuntimeException("{$class} must implement PipelineInterface with handle().");
+                }
+
+                $instance = new $class();
+                return $instance->handle($next, $params);
+            };
+        }
 
         return $chain;
     }
 
-    public static function afterware(array $afterwares, $response, array &$params = []): void
+    /**
+     * Invoke Filter
+     * Run After Response
+     * @param string[] $filters
+     * @param ?string $response
+     * @param array $params
+     */
+    public static function filter(array $filters, $response, array &$params = [])
     {
-        foreach ($afterwares as $afterware) {
-            [$class, $args] = static::parse($afterware, 'App\\Afterware\\');
-            $params = array_merge($params, $args);
+        $core = fn($response) => $response;
 
-            if (!is_subclass_of($class, AfterwareInterface::class) && !method_exists($class, 'terminate')) {
-                throw new \RuntimeException("{$class} must implement AfterwareInterface with terminate().");
-            }
+        $chain = $core;
 
-            (new $class())->terminate($params, $response);
+        foreach (array_reverse($filters) as $filter) {
+            $next = $chain;
+            $chain = function ($response, bool $continue = true) use ($filter, $next, &$params, $core) {
+                if (!$continue) {
+                    return $core($response);
+                }
+
+                [$class, $args] = static::parse($filter, 'App\\Filter\\');
+                $params = array_merge($params, $args);
+
+                if (!is_subclass_of($class, FilterInterface::class) && !method_exists($class, 'terminate')) {
+                    throw new \RuntimeException("{$class} must implement FilterInterface with terminate().");
+                }
+
+                $instance = new $class();
+                return $instance->terminate($next, $response, $params);
+            };
         }
+
+        return $chain($response);
     }
 
-    public static function controller(mixed $controller, array $params = [])
+    /**
+     * Invoke Response
+     * @param mixed $response
+     * @param array $params
+     */
+    public static function controller($controller, array $params = [])
     {
         if ($controller === null) {
             return null;
@@ -83,14 +131,23 @@ class Invoke
         throw new \InvalidArgumentException('Unresolvable controller.');
     }
 
-    protected static function parse(string $entry, string $prefix): array
+    ###############################################################################
+    /*============================ PARSE CLASS/STRING ============================*/
+    ###############################################################################
+    /**
+     * Make Class & Params from String
+     * @param string $entry Entry String
+     * @param string $namespace Namespace
+     * @return array
+     */
+    protected static function parse(string $entry, string $namespace): array
     {
         [$name, $argsStr] = array_pad(explode('|', $entry, 2), 2, null);
 
         if (str_starts_with($name, '\\') || class_exists($name)) {
             $class = ltrim($name, '\\');
         } else {
-            $class = $prefix . $name;
+            $class = $namespace . $name;
         }
 
         $params = [];
