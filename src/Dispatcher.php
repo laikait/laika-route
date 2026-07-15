@@ -68,7 +68,7 @@ class Dispatcher
         $pipelines = array_merge(Handler::getGlobalPipelines(), $route['pipelines']);
         $filters = array_merge(Handler::getGlobalFilters(), $route['filters']);
 
-        $core = function () use ($route, $params) {
+        $core = function () use ($route, &$params) {
             return Invoke::controller($route['controller'], $params);
         };
 
@@ -107,7 +107,14 @@ class Dispatcher
             return;
         }
 
-        $mime = MimeType::fromFile($file);
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+
+        if ($ext == 'php') {
+            http_response_code(404);
+            return;
+        }
+
+        $mime = MimeType::fromExtension($ext);
         header('Content-Type: ' . $mime);
         readfile($file);
     }

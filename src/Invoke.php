@@ -58,7 +58,7 @@ class Invoke
      * @param ?string $response
      * @param array $params
      */
-    public static function filter(array $filters, $response, array &$params = [])
+    public static function filter(array $filters, ?string $response, array &$params = [])
     {
         $core = fn($response) => $response;
 
@@ -66,7 +66,7 @@ class Invoke
 
         foreach (array_reverse($filters) as $filter) {
             $next = $chain;
-            $chain = function ($response, bool $continue = true) use ($filter, $next, &$params, $core) {
+            $chain = function (?string $response, bool $continue = true) use ($filter, $next, &$params, $core) {
                 if (!$continue) {
                     return $core($response);
                 }
