@@ -1,4 +1,12 @@
 <?php
+/**
+ * Laika Framework
+ * Author: Showket Ahmed
+ * Email: riyadhtayf@gmail.com
+ * License: MIT
+ * This file is part of the Laika PHP Framework.
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
 
 declare(strict_types=1);
 
@@ -11,24 +19,24 @@ class Handler
     protected static array $fallbacks = [];
     protected static array $groupStack = [];
 
-    protected static array $globalMiddleware = [];
-    protected static array $globalAfterware = [];
+    protected static array $globalPipelines = [];
+    protected static array $globalFilters = [];
 
-    public static function register(string $method, string $uri, mixed $controller, array $middlewares = []): array
+    public static function register(string $method, string $uri, mixed $controller, string|array $pipelines = []): array
     {
         $method = strtoupper($method);
         $uri = static::applyGroupPrefix($uri);
 
-        $groupMiddlewares = static::currentGroupMiddlewares();
-        $groupAfterwares = static::currentGroupAfterwares();
+        $groupPipelines = static::currentGroupPipelines();
+        $groupFilters = static::currentGroupFilters();
 
         $route = [
-            'method' => $method,
-            'uri' => $uri,
-            'controller' => $controller,
-            'middlewares' => array_merge($groupMiddlewares, $middlewares),
-            'afterwares' => $groupAfterwares,
-            'name' => null,
+            'method'        =>  $method,
+            'uri'           =>  $uri,
+            'controller'    =>  $controller,
+            'pipelines'     =>  array_merge($groupPipelines, (array) $pipelines),
+            'filters'       =>  $groupFilters,
+            'name'          =>  null,
         ];
 
         static::$routes[$method][$uri] = $route;
@@ -36,42 +44,42 @@ class Handler
         return $route;
     }
 
-    public static function get(string $uri, mixed $controller, array $middlewares = []): array
+    public static function get(string $uri, mixed $controller, string|array $pipelines = []): array
     {
-        return static::register('GET', $uri, $controller, $middlewares);
+        return static::register('GET', $uri, $controller, $pipelines);
     }
 
-    public static function post(string $uri, mixed $controller, array $middlewares = []): array
+    public static function post(string $uri, mixed $controller, string|array $pipelines = []): array
     {
-        return static::register('POST', $uri, $controller, $middlewares);
+        return static::register('POST', $uri, $controller, $pipelines);
     }
 
-    public static function put(string $uri, mixed $controller, array $middlewares = []): array
+    public static function put(string $uri, mixed $controller, string|array $pipelines = []): array
     {
-        return static::register('PUT', $uri, $controller, $middlewares);
+        return static::register('PUT', $uri, $controller, $pipelines);
     }
 
-    public static function patch(string $uri, mixed $controller, array $middlewares = []): array
+    public static function patch(string $uri, mixed $controller, string|array $pipelines = []): array
     {
-        return static::register('PATCH', $uri, $controller, $middlewares);
+        return static::register('PATCH', $uri, $controller, $pipelines);
     }
 
-    public static function delete(string $uri, mixed $controller, array $middlewares = []): array
+    public static function delete(string $uri, mixed $controller, string|array $pipelines = []): array
     {
-        return static::register('DELETE', $uri, $controller, $middlewares);
+        return static::register('DELETE', $uri, $controller, $pipelines);
     }
 
-    public static function options(string $uri, mixed $controller, array $middlewares = []): array
+    public static function options(string $uri, mixed $controller, string|array $pipelines = []): array
     {
-        return static::register('OPTIONS', $uri, $controller, $middlewares);
+        return static::register('OPTIONS', $uri, $controller, $pipelines);
     }
 
-    public static function registerGroup(string $prefix, callable $callback, array $middlewares = [], array $afterwares = []): void
+    public static function registerGroup(string $prefix, callable $callback, string|array $pipelines = [], string|array $filters = []): void
     {
         static::$groupStack[] = [
-            'prefix' => trim($prefix, '/'),
-            'middlewares' => $middlewares,
-            'afterwares' => $afterwares,
+            'prefix'        =>  trim($prefix, '/'),
+            'pipelines'     =>  (array) $pipelines,
+            'filters'       =>  (array) $filters,
         ];
 
         $callback();
@@ -79,12 +87,12 @@ class Handler
         array_pop(static::$groupStack);
     }
 
-    public static function registerFallback(?string $group, callable $callback, array $middlewares = []): void
+    public static function registerFallback(?string $group, callable $callback, string|array $pipelines = []): void
     {
         $key = static::normalizeFallbackKey($group);
         static::$fallbacks[$key] = [
-            'callback' => $callback,
-            'middlewares' => $middlewares,
+            'callback'      =>  $callback,
+            'pipelines'     =>  (array) $pipelines,
         ];
     }
 
@@ -105,42 +113,42 @@ class Handler
         return '/' . $full;
     }
 
-    protected static function currentGroupMiddlewares(): array
+    protected static function currentGroupPipelines(): array
     {
-        $middlewares = [];
+        $pipelines = [];
         foreach (static::$groupStack as $g) {
-            $middlewares = array_merge($middlewares, $g['middlewares']);
+            $pipelines = array_merge($pipelines, $g['pipelines']);
         }
-        return $middlewares;
+        return $pipelines;
     }
 
-    protected static function currentGroupAfterwares(): array
+    protected static function currentGroupFilters(): array
     {
-        $afterwares = [];
+        $filters = [];
         foreach (static::$groupStack as $g) {
-            $afterwares = array_merge($afterwares, $g['afterwares']);
+            $filters = array_merge($filters, $g['filters']);
         }
-        return $afterwares;
+        return $filters;
     }
 
-    public static function globalMiddleware(array $middlewares): void
+    public static function globalPipeline(string|array $pipelines): void
     {
-        static::$globalMiddleware = array_merge(static::$globalMiddleware, $middlewares);
+        static::$globalPipelines = array_merge(static::$globalPipelines, (array) $pipelines);
     }
 
-    public static function globalAfterware(array $afterwares): void
+    public static function globalFilter(string|array $filters): void
     {
-        static::$globalAfterware = array_merge(static::$globalAfterware, $afterwares);
+        static::$globalFilters = array_merge(static::$globalFilters, (array) $filters);
     }
 
-    public static function getGlobalMiddleware(): array
+    public static function getGlobalPipelines(): array
     {
-        return static::$globalMiddleware;
+        return static::$globalPipelines;
     }
 
-    public static function getGlobalAfterware(): array
+    public static function getGlobalFilters(): array
     {
-        return static::$globalAfterware;
+        return static::$globalFilters;
     }
 
     public static function name(string $name, string $method, string $uri): void
@@ -173,23 +181,25 @@ class Handler
         return $uri;
     }
 
-    public static function applyToPrefix(string $prefix, array $middlewares = [], array $afterwares = []): void
+    public static function applyToPrefix(string $prefix, string|array $pipelines = [], string|array $filters = []): void
     {
         $prefix = '/' . trim($prefix, '/');
+        $pipelines  = (array) $pipelines;
+        $filters    = (array) $filters;
 
         foreach (static::$routes as $method => $routes) {
             foreach ($routes as $uri => $route) {
                 if ($uri === $prefix || str_starts_with($uri, $prefix . '/')) {
-                    if ($middlewares) {
-                        static::$routes[$method][$uri]['middlewares'] = array_merge(
-                            $route['middlewares'],
-                            $middlewares
+                    if ($pipelines) {
+                        static::$routes[$method][$uri]['pipelines'] = array_merge(
+                            $route['pipelines'],
+                            $pipelines
                         );
                     }
-                    if ($afterwares) {
-                        static::$routes[$method][$uri]['afterwares'] = array_merge(
-                            $route['afterwares'],
-                            $afterwares
+                    if ($filters) {
+                        static::$routes[$method][$uri]['filters'] = array_merge(
+                            $route['filters'],
+                            $filters
                         );
                     }
                 }
@@ -197,19 +207,19 @@ class Handler
         }
     }
 
-    public static function appendMiddleware(string $method, string $uri, array $middlewares): void
+    public static function appendPipeline(string $method, string $uri, string|array $pipelines): void
     {
-        static::$routes[strtoupper($method)][$uri]['middlewares'] = array_merge(
-            static::$routes[strtoupper($method)][$uri]['middlewares'],
-            $middlewares
+        static::$routes[strtoupper($method)][$uri]['pipelines'] = array_merge(
+            static::$routes[strtoupper($method)][$uri]['pipelines'],
+            (array) $pipelines
         );
     }
 
-    public static function appendAfterware(string $method, string $uri, array $afterwares): void
+    public static function appendFilter(string $method, string $uri, string|array $filters): void
     {
-        static::$routes[strtoupper($method)][$uri]['afterwares'] = array_merge(
-            static::$routes[strtoupper($method)][$uri]['afterwares'],
-            $afterwares
+        static::$routes[strtoupper($method)][$uri]['filters'] = array_merge(
+            static::$routes[strtoupper($method)][$uri]['filters'],
+            (array) $filters
         );
     }
 

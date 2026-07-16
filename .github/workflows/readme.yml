@@ -1,0 +1,43 @@
+name: Auto Generate PHP README
+
+on:
+  push:
+    branches:
+      - main # Triggers on push to the main branch
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out code
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      # Step 2: Set up PHP (Optional: to validate or run PHP scripts if needed)
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      # Step 3: Set up Python for the generator tool
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      # Step 4: Install and run readmeai (parses your composer.json automatically)
+      - name: Generate README Markdown
+        run: |
+          pip install readmeai
+          readmeai --repository https://github.com{{ github.repository }} --output README.md
+
+      # Step 5: Commit and push changes safely
+      - name: Commit and Push README
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          git add README.md
+          git commit -m "docs: auto-update PHP README [skip ci]" || exit 0
+          git push

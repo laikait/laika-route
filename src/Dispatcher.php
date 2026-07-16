@@ -1,11 +1,20 @@
 <?php
+/**
+ * Laika Framework
+ * Author: Showket Ahmed
+ * Email: riyadhtayf@gmail.com
+ * License: MIT
+ * This file is part of the Laika PHP Framework.
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
 
 declare(strict_types=1);
 
 namespace Laika\Route;
 
-use Laika\Service\Response as ResponseService;
+use Laika\Service\CORS;
 use Laika\Service\MimeType;
+use Laika\Service\Response as ResponseService;
 
 class Dispatcher
 {
@@ -24,12 +33,12 @@ class Dispatcher
 
     public static function registerHeaders(): void
     {
-        ResponseService::setDefaultHeaders();
+        CORS::handle();
     }
 
     public static function registerAssetRoute(string $uri, string $filePath): void
     {
-        static::$assetRoutes[Url::normalize($uri)] = $filePath;
+        static::$assetRoutes[Path::normalize($uri)] = $filePath;
     }
 
     public static function dispatch(): void
@@ -37,7 +46,7 @@ class Dispatcher
         static::preDispatcher();
 
         $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-        $normalized = Url::normalize(Url::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
+        $normalized = Path::normalize(Path::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
 
         if (pathinfo($normalized, PATHINFO_EXTENSION)) {
             self::serveAsset($normalized);
@@ -45,10 +54,10 @@ class Dispatcher
         }
 
         // Load Routes and Match Request
-        Url::loadRoutes();
+        Path::loadRoutes();
 
         // Get Route and Params
-        ['route' => $route, 'params' => $params] = Url::matchRequestRoute($requestUri);
+        ['route' => $route, 'params' => $params] = Path::matchRequestRoute($requestUri);
 
         // Dispatch Fallback if no route is matched
         if ($route === null) {
@@ -56,19 +65,18 @@ class Dispatcher
             return;
         }
 
-        $middlewares = array_merge(Handler::getGlobalMiddleware(), $route['middlewares']);
-        $afterwares = array_merge(Handler::getGlobalAfterware(), $route['afterwares']);
+        $pipelines = array_merge(Handler::getGlobalPipelines(), $route['pipelines']);
+        $filters = array_merge(Handler::getGlobalFilters(), $route['filters']);
 
-        $core = function () use ($route, $params) {
+        $core = function () use ($route, &$params) {
             return Invoke::controller($route['controller'], $params);
         };
 
-        $response = Invoke::middleware($middlewares, $core, $params)();
+        $response = Invoke::pipeline($pipelines, $core, $params)();
+        $response = Invoke::filter($filters, $response, $params);
 
         // Send Response
         self::serveResponse($response);
-
-        Invoke::afterware($afterwares, $response, $params);
     }
 
     /*================================= PRIVATE API =================================*/
@@ -99,7 +107,14 @@ class Dispatcher
             return;
         }
 
-        $mime = MimeType::fromFile($file);
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+
+        if ($ext == 'php') {
+            http_response_code(404);
+            return;
+        }
+
+        $mime = MimeType::fromExtension($ext);
         header('Content-Type: ' . $mime);
         readfile($file);
     }
