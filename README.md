@@ -11,91 +11,92 @@ composer require laikait/laika-route
 ## Methods
 
 ```php
-use Laika\Route\Http;
+use Laika\Route\Url;
 
-Http::get('/users', 'UserController@index');
-Http::post('/users', 'UserController@store');
-Http::put('/users/{id}', 'UserController@update');
-Http::patch('/users/{id}', 'UserController@patch');
-Http::delete('/users/{id}', 'UserController@destroy');
-Http::options('/users', 'UserController@options');
+Url::get('/users', 'UserController@index');
+Url::post('/users', 'UserController@store');
+Url::put('/users/{id}', 'UserController@update');
+Url::patch('/users/{id}', 'UserController@patch');
+Url::delete('/users/{id}', 'UserController@destroy');
+Url::options('/users', 'UserController@options');
 ```
 
 ## Route Params
 
 ```php
-Http::get('/users/{id}', 'UserController@show');
-Http::get('/users/{id:\d+}', 'UserController@show'); // regex constraint
+Url::get('/users/{id}', 'UserController@show');
+Url::get('/users/{id:\d+}', 'UserController@show'); // regex constraint
 ```
 
-## Middleware
+## Pipeline
 
 ```php
 // Single
-Http::get('/dashboard', 'DashboardController@index')->middleware(['Auth']);
+Url::get('/dashboard', 'DashboardController@index')->pipeline('Auth');
 
 // Multiple
-Http::get('/orders', 'OrderController@index')->middleware(['Auth', 'VerifiedEmail']);
+Url::get('/orders', 'OrderController@index')->pipeline(['Auth', 'VerifiedEmail']);
 
 // With args
-Http::get('/admin', 'AdminController@index')->middleware(['Role|role=admin']);
+Url::get('/admin', 'AdminController@index')->pipeline(['Role|role=admin']);
 
 // Multiple args
-Http::get('/reports', 'ReportController@index')->middleware(['Throttle|limit=60,window=60']);
+Url::get('/reports', 'ReportController@index')->pipeline(['Throttle|limit=60,window=60']);
 
 // Global (applies to all routes)
-Http::globalMiddleware(['Csrf', 'Cors']);
+Url::globalPipeline(['Csrf', 'Cors']);
 ```
 
 Class:
 
 ```php
-namespace App\Middleware;
+namespace App\Pipeline;
 
-use Laika\Route\MiddlewareInterface;
+use Laika\Route\Interfaces\PipelineInterface;
 
-class Role implements MiddlewareInterface
+class Role implements PipelineInterface
 {
-    public function handle(array $params, callable $next)
+    public function handle(callable $next, array &$params)
     {
         if (($_SESSION['role'] ?? null) !== ($params['role'] ?? null)) {
             http_response_code(403);
-            return 'Forbidden'; // stops chain
+            return 'Forbidden'; // stops chain and print
         }
+        // return $next(false); Stop pipelines chain and call controller
         return $next(); // continues chain
     }
 }
 ```
 
-- `$params` — route params + middleware config args (`role=admin`), merged, passed by reference through the whole chain (middleware → controller → afterware).
+- `$params` — route params + pipeline config args (`role=admin`), merged, passed by reference through the whole chain (pipeline → controller → filter).
 - Return value short-circuits the response if not `$next()`.
 
-## Afterware
+## Filter
 
 ```php
 // Single
-Http::get('/orders', 'OrderController@index')->afterware(['LogAccess']);
+Url::get('/orders', 'OrderController@index')->filter('LogAccess');
 
 // Multiple
-Http::get('/orders', 'OrderController@index')->afterware(['LogAccess', 'CacheResponse']);
+Url::get('/orders', 'OrderController@index')->filter(['LogAccess', 'CacheResponse']);
 
 // With args
-Http::get('/reports', 'ReportController@index')->afterware(['LogAccess|level=info']);
+Url::get('/reports', 'ReportController@index')->filter(['LogAccess|level=info']);
 
 // Global
-Http::globalAfterware(['LogResponse']);
+Url::globalFilter(['LogResponse']);
 ```
 
 Class:
 
 ```php
-namespace App\Afterware;
+namespace App\Filter;
 
-use Laika\Route\AfterwareInterface;
+use Laika\Route\Interfaces\FilterInterface;
 
-class LogAccess implements AfterwareInterface
+class LogAccess implements FilterInterface
 {
-    public function terminate(array $params, $response): void
+    public function terminate(callable $next, ?string $response, array &$params): ?string
     {
         error_log('level=' . ($params['level'] ?? 'default'));
     }
@@ -105,40 +106,40 @@ class LogAccess implements AfterwareInterface
 ## Named Routes
 
 ```php
-Http::get('/users/{id}', 'UserController@show')->name('users.show');
+Url::get('/users/{id}', 'UserController@show')->name('users.show');
 
-$url = Http::url('users.show', ['id' => 5]); // /users/5
+$url = Url::url('users.show', ['id' => 5]); // /users/5
 ```
 
 ## Groups
 
 ```php
 // Basic
-Http::group('admin', function () {
-    Http::get('/dashboard', 'Admin\DashboardController@index');
+Url::group('admin', function () {
+    Url::get('/dashboard', 'Admin\DashboardController@index');
 });
 
-// Nested (inherits parent's middleware/afterware)
-Http::group('admin', function () {
-    Http::group('billing', function () {
-        Http::get('/invoices', 'Admin\Billing\InvoiceController@index');
-    })->middleware(['Permission|perm=billing.view']);
-})->middleware(['Auth']);
+// Nested (inherits parent's pipeline/filter)
+Url::group('admin', function () {
+    Url::group('billing', function () {
+        Url::get('/invoices', 'Admin\Billing\InvoiceController@index');
+    })->pipeline(['Permission|perm=billing.view']);
+})->pipeline(['Auth']);
 
-// Chained middleware + afterware (applied retroactively to all routes in group)
-Http::group('api', function () {
-    Http::post('/payments', 'PaymentController@store')->middleware(['ApiKey']);
-})->middleware(['Cors'])->afterware(['LogApi']);
+// Chained pipeline + filter (applied retroactively to all routes in group)
+Url::group('api', function () {
+    Url::post('/payments', 'PaymentController@store')->pipeline(['ApiKey']);
+})->pipeline(['Cors'])->filter(['LogApi']);
 ```
 
 ## Fallback
 
 ```php
 // Per group prefix
-Http::fallback('admin', fn() => '<h1>Admin route not found</h1>');
+Url::fallback('admin', fn() => '<h1>Admin route not found</h1>');
 
 // Default (no prefix)
-Http::fallback(null, fn() => '<h1>Page not found</h1>');
+Url::fallback(null, fn() => '<h1>Page not found</h1>');
 ```
 
 Longest-prefix match; falls back to built-in `_404::show()` if nothing matches.
@@ -146,31 +147,43 @@ Longest-prefix match; falls back to built-in `_404::show()` if nothing matches.
 ## Dispatch
 
 ```php
-Http::dispatch();
+Url::dispatch();
 ```
 
-Lifecycle: `preDispatcher()` → `registerInitiators()` (headers + hook files) → match route/asset/fallback → run middleware chain → run controller → run afterware chain.
-
-## Assets
-
-```php
-Dispatcher::registerAssetRoute('/style.css', __DIR__ . '/public/style.css');
-```
+Lifecycle: `preDispatcher()` → `registerInitiators()` (headers + hook files) → match route/asset/fallback → run pipeline chain → run controller → run filter chain.
 
 ## API Reference
 
 | Class | Purpose |
 |---|---|
-| `Http` | Static facade — routes, groups, middleware/afterware chaining, dispatch, named URLs |
+| `Url` | Static facade — routes, groups, pipeline/filter chaining, dispatch, named URLs |
 | `Handler` | Route registry — storage, group stack, fallback, naming |
 | `Dispatcher` | Request lifecycle, matching, asset serving, fallback resolution |
-| `Invoke` | Middleware/afterware chain execution, controller resolution |
+| `Invoke` | Pipeline/Filter chain execution, controller resolution |
 | `Reflection` | Named-argument injection for controllers |
-| `Url` | URI normalization, pattern compiling, request matching |
+| `Path` | URI normalization, pattern compiling, request matching |
 | `_404` | Default 404 page |
-| `MiddlewareInterface` | `handle(array $params, callable $next)` |
-| `AfterwareInterface` | `terminate(array $params, $response): void` |
+| `PipelineInterface` | `handle(callable $next, array &$params): ?string` |
+| `FilterInterface` | `terminate(callable $next, ?string $response, array &$params): ?string` |
 
 ## License
 
-MIT — Showket Ahmed
+Laika-route is protected under the [LICENSE](https://choosealicense.com/licenses) License. For more details, refer to the [LICENSE](https://choosealicense.com/licenses/) file.
+
+---
+
+## Acknowledgments
+
+- Credit `contributors`, `inspiration`, `references`, etc.
+
+<div align="right">
+
+[![][back-to-top]](#top)
+
+</div>
+
+
+[back-to-top]: https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square
+
+
+---

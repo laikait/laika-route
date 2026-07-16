@@ -18,8 +18,6 @@ use Laika\Service\Response as ResponseService;
 
 class Dispatcher
 {
-    protected static array $assetRoutes = [];
-
     public static function preDispatcher(): void
     {
         date_default_timezone_set('UTC');
@@ -34,11 +32,6 @@ class Dispatcher
     public static function registerHeaders(): void
     {
         CORS::handle();
-    }
-
-    public static function registerAssetRoute(string $uri, string $filePath): void
-    {
-        static::$assetRoutes[Path::normalize($uri)] = $filePath;
     }
 
     public static function dispatch(): void
