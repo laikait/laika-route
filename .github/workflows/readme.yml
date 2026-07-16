@@ -3,7 +3,7 @@ name: Auto Generate PHP README
 on:
   push:
     branches:
-      - main
+      - beta
     paths-ignore:
       - README.md
 
