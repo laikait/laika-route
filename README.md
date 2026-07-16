@@ -152,12 +152,6 @@ Url::dispatch();
 
 Lifecycle: `preDispatcher()` → `registerInitiators()` (headers + hook files) → match route/asset/fallback → run pipeline chain → run controller → run filter chain.
 
-## Assets
-
-```php
-Dispatcher::registerAssetRoute('/style.css', __DIR__ . '/public/style.css');
-```
-
 ## API Reference
 
 | Class | Purpose |
@@ -169,8 +163,8 @@ Dispatcher::registerAssetRoute('/style.css', __DIR__ . '/public/style.css');
 | `Reflection` | Named-argument injection for controllers |
 | `Path` | URI normalization, pattern compiling, request matching |
 | `_404` | Default 404 page |
-| `PipelineInterface` | `handle(callable $next, array &$params)` |
-| `FilterInterface` | `terminate(callable $next, ?string $response, array &$params): void` |
+| `PipelineInterface` | `handle(callable $next, array &$params): ?string` |
+| `FilterInterface` | `terminate(callable $next, ?string $response, array &$params): ?string` |
 
 ## License
 
