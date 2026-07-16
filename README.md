@@ -174,4 +174,22 @@ Dispatcher::registerAssetRoute('/style.css', __DIR__ . '/public/style.css');
 
 ## License
 
-MIT — Showket Ahmed
+Laika-route is protected under the [LICENSE](https://choosealicense.com/licenses) License. For more details, refer to the [LICENSE](https://choosealicense.com/licenses/) file.
+
+---
+
+## Acknowledgments
+
+- Credit `contributors`, `inspiration`, `references`, etc.
+
+<div align="right">
+
+[![][back-to-top]](#top)
+
+</div>
+
+
+[back-to-top]: https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square
+
+
+---
