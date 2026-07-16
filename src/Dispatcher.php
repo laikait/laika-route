@@ -38,7 +38,7 @@ class Dispatcher
 
     public static function registerAssetRoute(string $uri, string $filePath): void
     {
-        static::$assetRoutes[Url::normalize($uri)] = $filePath;
+        static::$assetRoutes[Path::normalize($uri)] = $filePath;
     }
 
     public static function dispatch(): void
@@ -46,7 +46,7 @@ class Dispatcher
         static::preDispatcher();
 
         $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-        $normalized = Url::normalize(Url::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
+        $normalized = Path::normalize(Path::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
 
         if (pathinfo($normalized, PATHINFO_EXTENSION)) {
             self::serveAsset($normalized);
@@ -54,10 +54,10 @@ class Dispatcher
         }
 
         // Load Routes and Match Request
-        Url::loadRoutes();
+        Path::loadRoutes();
 
         // Get Route and Params
-        ['route' => $route, 'params' => $params] = Url::matchRequestRoute($requestUri);
+        ['route' => $route, 'params' => $params] = Path::matchRequestRoute($requestUri);
 
         // Dispatch Fallback if no route is matched
         if ($route === null) {
