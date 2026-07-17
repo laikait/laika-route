@@ -94,6 +94,10 @@ class Dispatcher
 
     private static function serveAsset(string $filePath): void
     {
+        if (!str_starts_with($filePath, '/template') && !str_starts_with($filePath, '/assets') && !str_starts_with($filePath, '/uploads')) {
+            http_response_code(404);
+            return;
+        }
         $file = APP_PATH . $filePath;
         if (!is_file($file)) {
             http_response_code(404);
