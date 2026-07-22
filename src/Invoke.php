@@ -12,8 +12,11 @@ declare(strict_types=1);
 
 namespace Laika\Route;
 
-use Laika\Core\Interfaces\PipelineInterface;
-use Laika\Core\Interfaces\FilterInterface;
+use Laika\Route\Interfaces\PipelineInterface;
+use Laika\Route\Interfaces\FilterInterface;
+use Laika\Route\Exceptions\FilterException;
+use Laika\Route\Exceptions\PipelineException;
+use Laika\Route\Exceptions\ControllerException;
 
 class Invoke
 {
@@ -40,7 +43,7 @@ class Invoke
                 $params = array_merge($params, $args);
 
                 if (!is_subclass_of($class, PipelineInterface::class) && !method_exists($class, 'handle')) {
-                    throw new \RuntimeException("{$class} must implement PipelineInterface with handle().");
+                    throw new PipelineException("{$class} must implement PipelineInterface with handle().", 500);
                 }
 
                 $instance = new $class();
@@ -75,7 +78,7 @@ class Invoke
                 $params = array_merge($params, $args);
 
                 if (!is_subclass_of($class, FilterInterface::class) && !method_exists($class, 'terminate')) {
-                    throw new \RuntimeException("{$class} must implement FilterInterface with terminate().");
+                    throw new FilterException("{$class} must implement FilterInterface with terminate().", 500);
                 }
 
                 $instance = new $class();
@@ -128,7 +131,7 @@ class Invoke
             return $instance(...$reflection->namedArgs());
         }
 
-        throw new \InvalidArgumentException('Unresolvable controller.');
+        throw new ControllerException('Unresolvable controller.', 500);
     }
 
     ###############################################################################
