@@ -15,6 +15,7 @@ namespace Laika\Route;
 use Laika\Service\CORS;
 use Laika\Service\MimeType;
 use Laika\Service\Response as ResponseService;
+use Laika\Service\Activity;
 
 class Dispatcher
 {
@@ -67,6 +68,9 @@ class Dispatcher
 
         $response = Invoke::pipeline($pipelines, $core, $params)();
         $response = Invoke::filter($filters, $response, $params);
+
+        // Make Activities
+        Activity::insert();
 
         // Send Response
         self::serveResponse($response);
