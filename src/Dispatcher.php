@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Laika\Route;
 
 use Laika\Service\CORS;
+use Laika\Service\Infra;
 use Laika\Service\MimeType;
 use Laika\Service\Response as ResponseService;
 use Laika\Service\Activity;
@@ -48,7 +49,8 @@ class Dispatcher
         }
 
         // Load Routes and Match Request
-        Path::loadRoutes();
+        // Path::loadRoutes();
+        foreach (Infra::getRouteFiles() as $rf) require_once $rf;
 
         // Get Route and Params
         ['route' => $route, 'params' => $params] = Path::matchRequestRoute($requestUri);
