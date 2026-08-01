@@ -175,9 +175,8 @@ class Handler
         $uri = static::$namedRoutes[$name]['uri'];
 
         foreach ($params as $key => $value) {
-            $uri = str_replace('{' . $key . '}', (string) $value, $uri);
+            $uri = preg_replace('#\{' . preg_quote($key, '#') . '(:[^}]+)?\}#', (string) $value, $uri);
         }
-
         return $uri;
     }
 
