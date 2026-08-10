@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@accd6127cb78bee3e8082180cb391013d204ef9f # v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ matrix.php-version }}
           tools: composer
@@ -41,3 +41,25 @@ jobs:
       - name: Lint PHP syntax
         run: |
           find src -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      # Install Dev Tooling
+      # --prefer-dist pulls zipballs from api.github.com and disables source
+      # fallback, so a single TLS/network hiccup fails the whole job. Retry
+      # over git, which uses the system CA store instead of PHP's curl.
+      - name: Install dependencies
+        run: |
+          composer install --prefer-dist --no-progress \
+            || composer install --prefer-source --no-progress
+
+      # Catches what the parser cannot: functions removed or deprecated in a
+      # later version, signatures that changed, behaviour flagged for removal.
+      - name: PHPCompatibility check (8.1-8.5)
+        run: vendor/bin/phpcs --standard=phpcs.xml --report=full
+
+      - name: Report result
+        if: success()
+        run: echo "### PHP ${{ matrix.php-version }} ✅ compatible" >> $GITHUB_STEP_SUMMARY
+
+      - name: Report result (failed)
+        if: failure()
+        run: echo "### PHP ${{ matrix.php-version }} ❌ failed" >> $GITHUB_STEP_SUMMARY
