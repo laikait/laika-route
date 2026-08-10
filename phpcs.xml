@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<ruleset name="Laika Route PHP Compatibility">
+    <description>Ensures compatibility with PHP 8.1 through 8.5.</description>
+
+    <!-- Directories to scan -->
+    <file>src</file>
+
+    <!-- PHPCompatibility standard -->
+    <rule ref="PHPCompatibility">
+        <!--
+            Reports the PHP 7.0 left-to-right evaluation change for indirect access.
+            Every package here requires PHP >= 8.1, so the old behaviour is unreachable.
+        -->
+        <exclude name="PHPCompatibility.Variables.NewUniformVariableSyntax"/>
+    </rule>
+
+    <!-- Define target PHP version -->
+    <config name="testVersion" value="8.1-8.5"/>
+
+    <!-- Report every level, and fail the build on warnings too -->
+    <arg name="colors"/>
+    <arg value="sp"/>
+    <config name="ignore_warnings_on_exit" value="0"/>
+    <config name="ignore_errors_on_exit" value="0"/>
+
+    <!--
+        No vendor/ exclude-pattern here on purpose. PHPCS matches exclude
+        patterns against the whole path, so "vendor/" also excludes everything
+        when this package is itself checked out inside another project's
+        vendor/ directory. The <file> entries above already scope the run.
+    -->
+</ruleset>
