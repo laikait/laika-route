@@ -20,17 +20,6 @@ use Laika\Service\Activity;
 
 class Dispatcher
 {
-    public static function preDispatcher(): void
-    {
-        date_default_timezone_set('UTC');
-        static::registerInitiators();
-    }
-
-    public static function registerInitiators(): void
-    {
-        static::registerHeaders();
-    }
-
     public static function registerHeaders(): void
     {
         CORS::handle();
@@ -38,7 +27,8 @@ class Dispatcher
 
     public static function dispatch(): void
     {
-        static::preDispatcher();
+        // Register Headers
+        static::registerHeaders();
 
         $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
         $normalized = Path::normalize(Path::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
