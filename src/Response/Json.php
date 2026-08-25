@@ -23,6 +23,7 @@ final class Json
      */
     public static function render(string $str): void
     {
-        Response::json(json_decode($str))->send();
+        // Preserve an already-set status; json() would otherwise default it to 200.
+        Response::json(json_decode($str), Response::getStatus())->send();
     }
 }

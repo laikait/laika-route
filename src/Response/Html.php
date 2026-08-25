@@ -44,7 +44,10 @@ final class Html
 
         // Check Empty Form, Send Response
         if ($forms->length == 0) {
-            Response::html($str)->send();
+            // Read the status rather than letting html() default it to 200 --
+            // anything set earlier (a 404 fallback, a controller's setStatus)
+            // would otherwise be overwritten when send() runs.
+            Response::html($str, Response::getStatus())->send();
             return;
         }
 
@@ -94,6 +97,7 @@ final class Html
                 $form->insertBefore($dom->createTextNode("\n"), $firstChild);
             }
         }
-        Response::html($dom->saveHTML())->send();
+        // Same as above: preserve whatever status is already set.
+        Response::html($dom->saveHTML(), Response::getStatus())->send();
     }
 }
