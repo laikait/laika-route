@@ -23,6 +23,7 @@ final class Text
      */
     public static function render(string $str): void
     {
-        Response::text($str)->send();
+        // Preserve an already-set status; text() would otherwise default it to 200.
+        Response::text($str, Response::getStatus())->send();
     }
 }

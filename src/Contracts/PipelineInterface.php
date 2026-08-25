@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Laika\Route\Interfaces;
+namespace Laika\Route\Contracts;
 
 interface PipelineInterface
 {
