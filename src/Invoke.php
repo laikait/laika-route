@@ -12,8 +12,8 @@ declare(strict_types=1);
 
 namespace Laika\Route;
 
-use Laika\Route\Interfaces\PipelineInterface;
-use Laika\Route\Interfaces\FilterInterface;
+use Laika\Route\Contracts\PipelineInterface;
+use Laika\Route\Contracts\FilterInterface;
 use Laika\Route\Exceptions\FilterException;
 use Laika\Route\Exceptions\PipelineException;
 use Laika\Route\Exceptions\ControllerException;
