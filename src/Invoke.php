@@ -12,14 +12,43 @@ declare(strict_types=1);
 
 namespace Laika\Route;
 
-use Laika\Route\Contracts\PipelineInterface;
 use Laika\Route\Contracts\FilterInterface;
 use Laika\Route\Exceptions\FilterException;
+use Laika\Route\Contracts\PipelineInterface;
 use Laika\Route\Exceptions\PipelineException;
 use Laika\Route\Exceptions\ControllerException;
 
 class Invoke
 {
+    /**
+     * Container Resolver Installed By The Host Application
+     * @var ?callable
+     */
+    protected static $resolver = null;
+
+    /**
+     * Install The Container Resolver
+     *
+     * The router deliberately does not depend on a container. The host
+     * application wires one in at boot; with none installed every class is
+     * built with a plain `new`, exactly as before.
+     * @param ?callable $resolver fn(string $class): object
+     * @return void
+     */
+    public static function setResolver(?callable $resolver): void
+    {
+        static::$resolver = $resolver;
+    }
+
+    /**
+     * Get The Installed Resolver
+     * @return ?callable
+     */
+    public static function resolver(): ?callable
+    {
+        return static::$resolver;
+    }
+
     /**
      * Invoke Pipeline
      * Run Before Response
@@ -46,7 +75,7 @@ class Invoke
                     throw new PipelineException("{$class} must implement PipelineInterface with handle().", 500);
                 }
 
-                $instance = new $class();
+                $instance = static::make($class);
                 return $instance->handle($next, $params);
             };
         }
@@ -81,7 +110,7 @@ class Invoke
                     throw new FilterException("{$class} must implement FilterInterface with terminate().", 500);
                 }
 
-                $instance = new $class();
+                $instance = static::make($class);
                 return $instance->terminate($next, $response, $params);
             };
         }
@@ -101,14 +130,14 @@ class Invoke
         }
 
         if ($controller instanceof \Closure) {
-            $reflection = new Reflection($controller, $params);
+            $reflection = new Reflection($controller, $params, static::$resolver);
             return $controller(...$reflection->namedArgs());
         }
 
         if (is_array($controller) && count($controller) === 2) {
             [$class, $method] = $controller;
-            $instance = is_object($class) ? $class : new $class();
-            $reflection = new Reflection([$instance, $method], $params);
+            $instance = is_object($class) ? $class : static::make($class);
+            $reflection = new Reflection([$instance, $method], $params, static::$resolver);
             return $instance->{$method}(...$reflection->namedArgs());
         }
 
@@ -117,8 +146,8 @@ class Invoke
             if (!str_starts_with($class, '\\')) {
                 $class = 'App\\Controller\\' . $class;
             }
-            $instance = new $class();
-            $reflection = new Reflection([$instance, $method], $params);
+            $instance = static::make($class);
+            $reflection = new Reflection([$instance, $method], $params, static::$resolver);
             return $instance->{$method}(...$reflection->namedArgs());
         }
 
@@ -126,17 +155,30 @@ class Invoke
             if (!str_starts_with($controller, '\\')) {
                 $controller = 'App\\Controller\\' . $controller;
             }
-            $instance = new $controller();
-            $reflection = new Reflection([$instance, '__invoke'], $params);
+            $instance = static::make($controller);
+            $reflection = new Reflection([$instance, '__invoke'], $params, static::$resolver);
             return $instance(...$reflection->namedArgs());
         }
 
         throw new ControllerException('Unresolvable controller.', 500);
     }
 
-    ###############################################################################
-    /*============================ PARSE CLASS/STRING ============================*/
-    ###############################################################################
+    /**
+     * Build a Class Through The Resolver
+     *
+     * Falls back to a plain `new` when no resolver is installed, so the router
+     * keeps working standalone with no container present.
+     * @param string $class Fully Qualified Class Name
+     * @return object
+     */
+    protected static function make(string $class): object
+    {
+        return static::$resolver ? (static::$resolver)($class) : new $class();
+    }
+
+    ##########################################################################
+    /*========================= PARSE CLASS/STRING =========================*/
+    ##########################################################################
     /**
      * Make Class & Params from String
      * @param string $entry Entry String
