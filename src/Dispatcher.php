@@ -184,8 +184,8 @@ class Dispatcher
 
         foreach ($fallbacks as $prefix => $fallback) {
             if (str_starts_with($uri . '/', $prefix)) {
-                $response = Invoke::middleware(
-                    $fallback['middlewares'],
+                $response = Invoke::pipeline(
+                    $fallback['pipelines'],
                     fn() => ($fallback['callback'])()
                 )();
 

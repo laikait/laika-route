@@ -18,10 +18,17 @@ class Reflection
     protected array $params;
     protected $callable;
 
-    public function __construct($callable, array $params = [])
+    /**
+     * Container Resolver, When The Host Application Installed One
+     * @var ?callable
+     */
+    protected $resolver;
+
+    public function __construct($callable, array $params = [], ?callable $resolver = null)
     {
         $this->callable = $callable;
         $this->params = $params;
+        $this->resolver = $resolver;
         $this->reflection = $this->resolveReflection($callable);
     }
 
@@ -58,7 +65,9 @@ class Reflection
 
         foreach ($this->reflection->getParameters() as $param) {
             $name = $param->getName();
+            $failure = null;
 
+            // Route params win by name, ahead of anything the container holds
             if (array_key_exists($name, $this->params)) {
                 $args[] = $this->params[$name];
                 continue;
@@ -73,9 +82,37 @@ class Reflection
                 continue;
             }
 
+            // A class or interface type hint is a dependency: ask the container
+            $type = $param->getType();
+            $injectable = $this->resolver !== null
+                && $type instanceof \ReflectionNamedType
+                && !$type->isBuiltin();
+
+            if ($injectable) {
+                try {
+                    $args[] = ($this->resolver)($type->getName());
+                    continue;
+                } catch (\Throwable $e) {
+                    // Not resolvable. An optional parameter still has its default below.
+                    $failure = $e;
+                }
+            }
+
             if ($param->isDefaultValueAvailable()) {
                 $args[] = $param->getDefaultValue();
                 continue;
+            }
+
+            // A dependency the container was asked for and could not build is a
+            // wiring mistake, not an optional argument. Reporting it here beats a
+            // null surfacing later inside the callee.
+            if ($injectable) {
+                throw new \RuntimeException(
+                    "Cannot resolve \${$name} of type {$type->getName()} for {$this}."
+                    . ' Bind it in a RelayProvider if it is an interface.',
+                    0,
+                    $failure
+                );
             }
 
             if ($param->allowsNull()) {
