@@ -56,8 +56,18 @@ class Dispatcher
         // Register Headers
         static::registerHeaders();
 
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-        $normalized = Path::normalize(Path::stripBasePath(parse_url($requestUri, PHP_URL_PATH) ?? '/'));
+        // One canonical, percent-decoded path for the matcher, the asset
+        // handler and the fallback alike. Null means the request encoded a
+        // separator (%2F, %5C), smuggled a NUL, or is not valid UTF-8 -- none
+        // of which may reach serveAsset(), whose traversal checks assume a
+        // path that means what it says.
+        $normalized = Path::requestPath();
+
+        if ($normalized === null) {
+            ResponseService::setStatus(404);
+            Response\Html::render(_404::show());
+            return;
+        }
 
         if (pathinfo($normalized, PATHINFO_EXTENSION)) {
             self::serveAsset($normalized);
@@ -69,7 +79,7 @@ class Dispatcher
         foreach (Infra::getRouteFiles() as $rf) require_once $rf;
 
         // Get Route and Params
-        ['route' => $route, 'params' => $params] = Path::matchRequestRoute($requestUri);
+        ['route' => $route, 'params' => $params] = Path::matchRequestRoute($normalized);
 
         // Dispatch Fallback if no route is matched
         if ($route === null) {

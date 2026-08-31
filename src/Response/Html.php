@@ -36,9 +36,23 @@ final class Html
         // Suppress warnings caused by invalid HTML
         libxml_use_internal_errors(true);
 
-        $dom->loadHTML($str, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        // Without a charset hint loadHTML() assumes ISO-8859-1, which turns
+        // every multi-byte character into mojibake on the saveHTML() path
+        // below -- "বাংলা" came back as "&agrave;&brvbar;&not;...".
+        $dom->loadHTML(
+            '<?xml encoding="UTF-8">' . $str,
+            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+        );
 
         libxml_clear_errors();
+
+        // Drop the hint again so it cannot reach the browser. Snapshot the list
+        // first: removing from a live DOMNodeList while iterating skips nodes.
+        foreach (iterator_to_array($dom->childNodes) as $node) {
+            if ($node->nodeType === XML_PI_NODE) {
+                $dom->removeChild($node);
+            }
+        }
 
         $forms = $dom->getElementsByTagName('form');
 

@@ -25,7 +25,9 @@ class Handler
     public static function register(string $method, string $uri, mixed $controller, string|array $pipelines = []): array
     {
         $method = strtoupper($method);
-        $uri = static::applyGroupPrefix($uri);
+        // Registered keys live in the same decoded space as the request, so a
+        // URI pasted in already-encoded still matches. See Path::requestPath().
+        $uri = Path::normalizeRouteUri(static::applyGroupPrefix($uri));
 
         $groupPipelines = static::currentGroupPipelines();
         $groupFilters = static::currentGroupFilters();
@@ -175,7 +177,13 @@ class Handler
         $uri = static::$namedRoutes[$name]['uri'];
 
         foreach ($params as $key => $value) {
-            $uri = preg_replace('#\{' . preg_quote($key, '#') . '(:[^}]+)?\}#', (string) $value, $uri);
+            // rawurlencode both percent-encodes a value holding / ? or #, and
+            // strips the $ and \ that preg_replace would read as backreferences
+            $uri = preg_replace(
+                '#\{' . preg_quote($key, '#') . '(:[^}]+)?\}#',
+                rawurlencode((string) $value),
+                $uri
+            );
         }
         return $uri;
     }
