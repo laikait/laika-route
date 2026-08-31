@@ -13,21 +13,38 @@ declare(strict_types=1);
 namespace Laika\Route;
 
 use Laika\Service\CORS;
+use Laika\Service\Config;
 use Laika\Service\Infra;
 use Laika\Service\MimeType;
 use Laika\Service\Response as ResponseService;
 use Laika\Service\Activity;
+use Throwable;
 
 class Dispatcher
 {
-    /** @var string[] Directories, relative to APP_PATH, whose contents may be served */
-    private const SERVABLE_ROOTS = ['assets', 'uploads', 'template/assets'];
+    /**
+     * @var string[] Roots never served, matched against the first path segment.
+     * Framework internals; deliberately the same list nginx.conf denies, so the
+     * front controller and the web server agree. Glob patterns allowed.
+     */
+    private const FORBIDDEN_ROOTS = ['lf-*', 'vendor', 'docs'];
 
     /**
-     * @var string[] Known MIME types never served from a user-writable path.
-     * All of them render as markup, so an uploaded file becomes stored XSS.
+     * @var string[] Refused when lf-config/assets.php is absent.
+     * Reproduces the pre-config behaviour: the php family must never leave the
+     * disk as bytes, and the markup types all render, so a file served from a
+     * user-writable path becomes stored XSS.
      */
-    private const BLOCKED_TYPES = ['html', 'htm', 'svg', 'xml', 'json'];
+    private const DEFAULT_BLOCKED = ['php', 'phar', 'phtml', 'phps', 'html', 'htm', 'svg', 'xml', 'json'];
+
+    /** @var string[] Roots written by users rather than by the app author */
+    private const DEFAULT_UNTRUSTED_ROOTS = ['uploads'];
+
+    /** @var string[] Types refused inside an untrusted root. All of them render as markup */
+    private const DEFAULT_UNTRUSTED_TYPES = ['html', 'htm', 'svg', 'xml'];
+
+    /** @var ?array Resolved once per process, see rules() */
+    private static ?array $rules = null;
 
     public static function registerHeaders(): void
     {
@@ -98,12 +115,20 @@ class Dispatcher
     }
 
     /**
-     * Serve a Static File From a Servable Root
+     * Serve a Static File
+     *
+     * Every request reaches the front controller, including one that maps to a
+     * real file on disk, so this method is the only gatekeeper the web server
+     * leaves in place. Two independent checks decide it: where the file
+     * resolved to, and what its extension is.
      *
      * Path::normalize() only trims slashes, it does not collapse "..", so the
      * incoming path is untrusted: "/assets/../lf-storage/keys/app.key" reaches
      * here intact. Containment is therefore decided by realpath(), never by
      * inspecting the request string.
+     *
+     * Every rejection is a bare 404, so a forbidden path is indistinguishable
+     * from a missing one.
      *
      * @param string $filePath Normalized request path
      * @return void
@@ -120,61 +145,164 @@ class Dispatcher
             return;
         }
 
-        $ext   = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        $types = MimeType::all();
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 
-        // Allowlist. An unknown extension is refused outright rather than sent
-        // as application/octet-stream, which is what leaked .twig sources.
-        if ($ext === '' || in_array($ext, self::BLOCKED_TYPES, true) || !isset($types[$ext])) {
+        if ($ext === '') {
             http_response_code(404);
             return;
         }
 
-        // realpath() collapses ".." and resolves symlinks. This is the boundary.
+        // realpath() collapses ".." and resolves symlinks. This is the boundary:
+        // a symlink pointing out of template/ lands on its target and is judged
+        // there, not where the request said it was.
         $real = realpath(APP_PATH . '/' . ltrim($path, '/'));
 
-        if ($real === false || !is_file($real) || !self::withinServableRoot($real)) {
+        if ($real === false || !is_file($real)) {
             http_response_code(404);
             return;
         }
 
-        header('Content-Type: ' . $types[$ext]);
+        $relative = self::relativeToApp($real);
+
+        if ($relative === null || !self::servableLocation($relative) || !self::servableType($ext, $relative)) {
+            http_response_code(404);
+            return;
+        }
+
+        header('Content-Type: ' . MimeType::fromExtension($ext));
         header('X-Content-Type-Options: nosniff');
         header('Content-Length: ' . filesize($real));
         readfile($real);
     }
 
     /**
-     * Is a Resolved Path Inside One of The Servable Roots
+     * Path Relative to APP_PATH
      * @param string $real Absolute path, already through realpath()
-     * @return bool
+     * @return ?string Null when the path resolved outside the application
      */
-    private static function withinServableRoot(string $real): bool
+    private static function relativeToApp(string $real): ?string
     {
+        $root = realpath(APP_PATH);
+
+        if ($root === false) {
+            return null;
+        }
+
+        // Trailing slash matters: without it a sibling directory whose name
+        // merely starts with APP_PATH would also match.
+        $root = rtrim(str_replace('\\', '/', $root), '/') . '/';
         $real = str_replace('\\', '/', $real);
 
-        foreach (self::SERVABLE_ROOTS as $relative) {
-            $base = realpath(APP_PATH . '/' . $relative);
+        // The filesystem is case-insensitive on Windows, so the check must be too
+        $match = PHP_OS_FAMILY === 'Windows'
+            ? stripos($real, $root) === 0
+            : str_starts_with($real, $root);
 
-            if ($base === false) {
-                continue; // Directory absent, nothing to serve from it.
-            }
+        return $match ? substr($real, strlen($root)) : null;
+    }
 
-            // Trailing slash matters: without it "/assets" also matches a
-            // sibling "/assets-backup".
-            $base = rtrim(str_replace('\\', '/', $base), '/') . '/';
+    /**
+     * Is a Resolved Path in a Servable Location
+     * @param string $relative Path relative to APP_PATH
+     * @return bool
+     */
+    private static function servableLocation(string $relative): bool
+    {
+        $segments = explode('/', $relative);
 
-            // The filesystem is case-insensitive on Windows, so the check must be too
-            $match = PHP_OS_FAMILY === 'Windows'
-                ? stripos($real, $base) === 0
-                : str_starts_with($real, $base);
-
-            if ($match) {
-                return true;
+        // A dot path is never public: .git/, .env, .htaccess, lf-storage/.htaccess
+        foreach ($segments as $segment) {
+            if (str_starts_with($segment, '.')) {
+                return false;
             }
         }
 
-        return false;
+        $root = strtolower($segments[0]);
+
+        // FNM_CASEFOLD is a GNU extension and undefined on some builds, so both
+        // sides are lowercased rather than passing the flag.
+        foreach (self::FORBIDDEN_ROOTS as $pattern) {
+            if (fnmatch($pattern, $root)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Is an Extension Servable From This Location
+     *
+     * An extension outside the configured list is refused outright rather than
+     * sent as application/octet-stream, which is what leaked .twig sources.
+     *
+     * @param string $ext Lowercased extension
+     * @param string $relative Path relative to APP_PATH
+     * @return bool
+     */
+    private static function servableType(string $ext, string $relative): bool
+    {
+        $rules = self::rules();
+
+        if (in_array($ext, $rules['blocked'], true) || !in_array($ext, $rules['extensions'], true)) {
+            return false;
+        }
+
+        $root = strtolower(explode('/', $relative)[0]);
+
+        return !(in_array($root, $rules['untrusted_roots'], true)
+            && in_array($ext, $rules['untrusted_blocked'], true));
+    }
+
+    /**
+     * Extension Rules From lf-config/assets.php
+     *
+     * MimeType::register() adds a Content-Type, it does not make a type
+     * servable. Only this config decides what may leave the disk.
+     *
+     * @return array{extensions:string[],blocked:string[],untrusted_roots:string[],untrusted_blocked:string[]}
+     */
+    private static function rules(): array
+    {
+        if (self::$rules !== null) {
+            return self::$rules;
+        }
+
+        try {
+            $extensions = Config::get('assets', 'extensions', array_keys(MimeType::all()));
+            $blocked    = Config::get('assets', 'blocked', self::DEFAULT_BLOCKED);
+            $untrusted  = (array) (Config::get('assets', 'untrusted') ?? []);
+        } catch (Throwable) {
+            // No container yet (a unit test, a CLI script that never booted).
+            // Fall back to the built-in defaults rather than fatal.
+            $extensions = array_keys(MimeType::all());
+            $blocked    = self::DEFAULT_BLOCKED;
+            $untrusted  = [];
+        }
+
+        $blocked = self::listOf($blocked);
+
+        return self::$rules = [
+            // Subtracting here means a type named in both lists is refused, so
+            // 'blocked' cannot be defeated by an entry in 'extensions'.
+            'extensions'        => array_values(array_diff(self::listOf($extensions), $blocked)),
+            'blocked'           => $blocked,
+            'untrusted_roots'   => self::listOf($untrusted['roots'] ?? self::DEFAULT_UNTRUSTED_ROOTS),
+            'untrusted_blocked' => self::listOf($untrusted['blocked'] ?? self::DEFAULT_UNTRUSTED_TYPES),
+        ];
+    }
+
+    /**
+     * Normalize a Configured List
+     * @param mixed $values Whatever the config file held
+     * @return string[] Lowercased, trimmed, no blanks, no duplicates
+     */
+    private static function listOf(mixed $values): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map(static fn ($value): string => strtolower(trim((string) $value)), (array) $values),
+            static fn (string $value): bool => $value !== ''
+        )));
     }
 
     private static function dispatchFallback(string $uri): void
