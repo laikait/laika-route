@@ -24,7 +24,8 @@
     "require-dev": {
         "squizlabs/php_codesniffer": "^4.0.2",
         "phpcompatibility/php-compatibility": "dev-develop",
-        "dealerdirect/phpcodesniffer-composer-installer": "^1.1"
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.1",
+        "phpunit/phpunit": "^10.0"
     },
     "config": {
         "allow-plugins": {
@@ -32,6 +33,12 @@
         }
     },
     "scripts": {
-        "compat": "phpcs --standard=phpcs.xml --report=full"
+        "compat": "phpcs --standard=phpcs.xml --report=full",
+        "test": "phpunit"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Laika\\Route\\Tests\\": "tests/"
+        }
     }
 }
