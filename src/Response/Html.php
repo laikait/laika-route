@@ -86,7 +86,8 @@ final class Html
                         [
                             "status"        =>  "failed",
                             "message"       =>  "CSRF Input Type Shoud Be [hidden]",
-                            "event_time"    =>  Date::toIso8601()
+                            // Date was never imported here, so this path was a fatal
+                            "event_time"    =>  date(DATE_ATOM)
                         ],
                         415)
                     ->send();

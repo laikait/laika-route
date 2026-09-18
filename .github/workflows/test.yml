@@ -40,7 +40,7 @@ jobs:
       # Lint PHP Syntax
       - name: Lint PHP syntax
         run: |
-          find src -name '*.php' -print0 | xargs -0 -n1 php -l
+          find src tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
       # Install Dev Tooling
       # --prefer-dist pulls zipballs from api.github.com and disables source
@@ -55,6 +55,11 @@ jobs:
       # later version, signatures that changed, behaviour flagged for removal.
       - name: PHPCompatibility check (8.1-8.5)
         run: vendor/bin/phpcs --standard=phpcs.xml --report=full
+
+      # Asset::serve() is the only thing standing between a request and every
+      # file on disk, so the servability rules are covered rather than trusted.
+      - name: Unit tests
+        run: vendor/bin/phpunit --colors=never
 
       - name: Report result
         if: success()

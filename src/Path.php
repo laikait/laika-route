@@ -153,8 +153,33 @@ class Path
         return ['route' => null, 'params' => []];
     }
 
+    /**
+     * Strip The Sub-Directory The Front Controller Sits In
+     *
+     * An install at /laika-project has to have that prefix removed before the
+     * path means anything to the matcher or to the asset handler.
+     *
+     * SCRIPT_NAME only names the front controller under a real web server.
+     * PHP's built-in server sets it to the request path instead, so dirname()
+     * there is the request's own parent directory, and stripping it turned
+     * "/assets/css/app.css" into "/app.css" -- every nested asset 404ed under
+     * `laika start` while the same URL worked under Apache.
+     *
+     * @param string $path Normalized request path
+     * @return string
+     */
     public static function stripBasePath(string $path): string
     {
+        // php -S serves from its document root, so there is never a prefix to
+        // strip. The check is on the SAPI and not on SCRIPT_NAME because the
+        // built-in server sets SCRIPT_NAME *and* SCRIPT_FILENAME to the
+        // requested file whenever one exists -- indistinguishable from a real
+        // web server by inspection, and stripping dirname() there turned
+        // "/assets/css/app.css" into "/app.css".
+        if (PHP_SAPI === 'cli-server') {
+            return $path === '' ? '/' : $path;
+        }
+
         $basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
 
         if ($basePath !== '' && $basePath !== '/' && str_starts_with($path, $basePath)) {
@@ -201,13 +226,5 @@ class Path
         }
 
         return '#^' . $pattern . '$#u';
-    }
-
-    public static function loadRoutes(?string $path = null): void
-    {
-        $path = $path ?? APP_PATH . '/lf-routes';
-        foreach (glob(rtrim($path, '/') . '/*.php') as $file) {
-            require_once $file;
-        }
     }
 }
